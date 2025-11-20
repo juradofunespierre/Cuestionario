@@ -1,0 +1,208 @@
+---
+title: "Untitled"
+author: "Pierre Jurado Funes"
+date: "2025-11-20"
+output: html_document
+---
+
+
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+```
+
+```{r}
+setwd("C:/Trabajos")
+library(rio)
+data=import("Nuevabasse.xlsx")
+```
+```{r}
+names(data)
+```
+```{r}
+datos2 <- data %>%
+  select(
+    Provincia,
+    Pnacidos_bajo_peso,
+    `Pdesnutrición _cronica_menor5`,
+    `P_anemia_6_35m\r\n`,
+    `InVulnerabilidad_Inseguridad Alimentaria_IVIA\r\n`,
+    In_DensidadEstado_IDE,
+    `InDesaHuman_IDH\r\n`,
+    `DevenPerca_so_ Actividad\r\n`,
+    DevenPerca_so_Inversion
+  )
+```
+
+```{r}
+datos2 %>%
+  mutate(anemia_num = as.numeric(`P_anemia_6_35m\r\n`)) %>%
+  filter(is.na(anemia_num)) %>%
+  select(Provincia, `P_anemia_6_35m\r\n`)
+```
+```{r}
+datos2 <- datos2 %>%
+  filter(Provincia != "PARURO")
+```
+
+```{r}
+datos3 <- datos2 %>%
+  mutate(
+    across(
+      .cols = -Provincia,   # todas menos Provincia
+      .fns  = ~ as.numeric(.)
+    )
+  )
+```
+
+```{r}
+str(datos3)
+```
+```{r}
+datos3 = datos2 %>%
+  mutate(across(-Provincia, ~ as.numeric(.))) %>%
+  drop_na()
+```
+
+```{r}
+datos_final <- datos3 %>%
+  rename(
+    bajo_peso            = Pnacidos_bajo_peso,
+    desnutricion_cronica = `Pdesnutrición _cronica_menor5`,
+    anemia_6_35m         = `P_anemia_6_35m\r\n`,
+    ivia                 = `InVulnerabilidad_Inseguridad Alimentaria_IVIA\r\n`,
+    ide                  = In_DensidadEstado_IDE,
+    idh                  = `InDesaHuman_IDH\r\n`,
+    dev_pc_actividad     = `DevenPerca_so_ Actividad\r\n`,
+    dev_pc_inversion     = DevenPerca_so_Inversion
+  )
+
+```
+
+```{r}
+names(datos_final)
+```
+```{r}
+glimpse(datos_final)
+```
+```{r}
+vars = datos_final %>%
+  select(
+    bajo_peso,
+    desnutricion_cronica,
+    anemia_6_35m,
+    dev_pc_actividad,
+    dev_pc_inversion
+  )
+
+```
+
+```{r}
+summary(vars)
+```
+```{r}
+cor(vars, use = "pairwise.complete.obs", method = "pearson")
+```
+```{r}
+cor.test(vars$bajo_peso, vars$dev_pc_actividad)
+```
+```{r}
+cor.test(vars$desnutricion_cronica, vars$dev_pc_actividad)
+```
+```{r}
+cor.test(vars$anemia_6_35m, vars$dev_pc_inversion)
+```
+```{r}
+pairs(vars)
+```
+```{r}
+plot(vars$dev_pc_actividad, vars$desnutricion_cronica,
+     xlab = "Devengado per cápita - Actividad (2020)",
+     ylab = "Desnutrición crónica <5 años (2020)",
+     main = "Relación entre gasto en actividad y desnutrición crónica")
+abline(lm(desnutricion_cronica ~ dev_pc_actividad, data = vars))
+```
+```{r}
+clust_data = datos_final %>% 
+  select(ivia, ide, idh)
+```
+
+```{r}
+clust_data_scaled = scale(clust_data)
+```
+
+```{r}
+summary(clust_data_scaled)
+```
+```{r}
+library(cluster)
+set.seed(123)
+```
+```{r}
+pam5 <- pam(clust_data_scaled, k = 5)
+```
+```{r}
+pam5$clusinfo
+```
+```{r}
+pam5$silinfo$avg.width
+```
+```{r}
+agnes_res <- agnes(clust_data_scaled, method = "ward")
+```
+```{r}
+cl_agnes5 <- cutree(as.hclust(agnes_res), k = 5)
+```
+
+```{r}
+dist_mat <- dist(clust_data_scaled)
+```
+
+```{r}
+sil_pam   <- silhouette(pam5$clustering, dist_mat)
+sil_agnes <- silhouette(cl_agnes5,     dist_mat)
+```
+
+```{r}
+summary(sil_pam)$avg.width
+summary(sil_agnes)$avg.width
+```
+```{r}
+clust_data <- datos_final %>% 
+  select(ivia, ide, idh)
+```
+
+```{r}
+clust_data_scaled <- scale(clust_data)
+
+```
+```{r}
+plot(agnes_res, 
+     main = "Dendrograma - AGNES (Ward)", 
+     xlab = "", 
+     sub = "")
+```
+```{r}
+hc <- as.hclust(agnes_res)
+
+clusters_agnes <- cutree(hc, k = 5)
+
+table(clusters_agnes)
+
+```
+```{r}
+datos_final = datos_final %>%
+  mutate(cluster_agnes = factor(clusters_agnes))
+
+head(datos_final)
+```
+```{r}
+plot(clust_data_scaled[,1], clust_data_scaled[,2],
+     col = clusters_agnes,
+     pch = 19,
+     xlab = "IVIA (estandarizado)",
+     ylab = "IDE (estandarizado)",
+     main = "Clusters AGNES (k = 5)")
+```
+
